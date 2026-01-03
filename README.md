@@ -2,7 +2,7 @@
 
 A real-time network packet monitor with a beautiful TUI interface, built with Go. Monitor DNS, TCP, UDP, HTTP, HTTPS, QUIC, and ICMP traffic in your terminal.
 
-![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
+![Platform](https://img.shields.io/badge/platform-macOS%20%28Intel%2FApple%20Silicon%29%20%7C%20Linux-lightgrey)
 ![Go Version](https://img.shields.io/badge/go-1.25+-00ADD8?logo=go)
 
 ![netmon](assets/main.png)
