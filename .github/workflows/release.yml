@@ -1,44 +1,102 @@
-name: release
+name: Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Release version (e.g., v1.0.0)'
-        required: true
-        type: string
+  push:
+    branches:
+      - main
+    paths:
+      - 'version'
+      - 'go.mod'
+      - 'main.go'
+      - '.github/workflows/release.yml'
 
 permissions:
   contents: write
 
 jobs:
-  build-and-release:
-    runs-on: ubuntu-latest
-
+  build-macos:
+    runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Setup Go
+      - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: "1.25"
 
-      - name: Build all platforms
-        run: make all
+      - name: Install libpcap
+        run: brew install libpcap
 
-      - name: Extract version
+      - name: Build macOS binaries
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          
+          # Apple Silicon (arm64)
+          echo "Building native arm64..."
+          go build -o dist/netmon_darwin_arm64 main.go
+          tar -czf dist/netmon_Darwin_arm64.tar.gz -C dist netmon_darwin_arm64
+          
+          # Intel Mac(x86_64)
+          echo "Building x86_64 (Intel Mac) via cross-compilation..."
+          GOOS=darwin GOARCH=amd64 CGO_ENABLED=1 go build -o dist/netmon_darwin_x64 main.go || {
+            echo "Warning: x86_64 cross-compilation failed (CGO limitation). Skipping..."
+          }
+          if [ -f dist/netmon_darwin_x64 ]; then
+            tar -czf dist/netmon_Darwin_x86_64.tar.gz -C dist netmon_darwin_x64
+          fi
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-binaries
+          path: dist/netmon_Darwin_*.tar.gz
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: Install libpcap
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpcap-dev
+
+      - name: Build Linux binary
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build -o dist/netmon_linux_x86_64 main.go
+          tar -czf dist/netmon_Linux_x86_64.tar.gz -C dist netmon_linux_x86_64
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-binaries
+          path: dist/netmon_Linux_*.tar.gz
+
+  release:
+    needs: [build-macos, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read version
         id: version
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ github.event.inputs.version }}"
-          else
-            VERSION=${GITHUB_REF#refs/tags/}
-          fi
+          VERSION="v$(cat version | tr -d '[:space:]')"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Extracted version: $VERSION"
 
-      - name: Create git tag (if not exists)
-        if: github.event_name == 'workflow_dispatch'
+      - name: Create git tag
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           if ! git rev-parse "$VERSION" >/dev/null 2>&1; then
@@ -50,9 +108,27 @@ jobs:
             echo "Tag $VERSION already exists"
           fi
 
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare distribution files and generate checksums
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          find artifacts -name "*.tar.gz" -exec cp {} dist/ \;
+          echo "Files in dist:"
+          ls -la dist/
+          cd dist
+          shasum -a 256 *.tar.gz > checksums.txt
+
       - name: Create GitHub release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.version.outputs.version }}
-          files: dist/netmon_*
+          name: netmon ${{ steps.version.outputs.version }}
+          files: |
+            dist/netmon_*.tar.gz
+            dist/checksums.txt
           generate_release_notes: true
