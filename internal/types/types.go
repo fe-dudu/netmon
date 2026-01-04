@@ -38,6 +38,7 @@ type App struct {
 	App         *tview.Application
 	PacketView  *tview.TextView
 	FilterView  *tview.TextView
+	ModeView    *tview.TextView
 	SearchInput *tview.InputField
 	MainFlex    *tview.Flex
 
@@ -47,6 +48,7 @@ type App struct {
 	CurrentFilterIdx int
 	SearchIP         string
 	IsSearchMode     bool
+	IsExpandedMode   bool
 
 	Iface    pcap.Interface
 	Handle   *pcap.Handle

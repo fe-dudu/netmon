@@ -3,7 +3,6 @@ package ui
 import (
 	"fmt"
 	"log"
-	"os"
 	"strings"
 	"time"
 
@@ -23,6 +22,7 @@ func NewApp(iface pcap.Interface, handle *pcap.Handle, filterIdx int) *types.App
 		App:              tview.NewApplication(),
 		Packets:          make([]types.PacketInfo, 0),
 		CurrentFilterIdx: filterIdx,
+		IsExpandedMode:   false,
 		Iface:            iface,
 		Handle:           handle,
 		PacketCh:         make(chan gopacket.Packet, 1000),
@@ -47,6 +47,14 @@ func NewApp(iface pcap.Interface, handle *pcap.Handle, filterIdx int) *types.App
 	app.FilterView.SetBorder(true).
 		SetBorderColor(tcell.ColorYellow).
 		SetTitle("[yellow]🔧 Filters[white]").
+		SetTitleAlign(tview.AlignLeft)
+
+	app.ModeView = tview.NewTextView().
+		SetDynamicColors(true).
+		SetTextAlign(tview.AlignLeft)
+	app.ModeView.SetBorder(true).
+		SetBorderColor(tcell.ColorGreen).
+		SetTitle("[green]📐 Mode[white]").
 		SetTitleAlign(tview.AlignLeft)
 
 	app.SearchInput = tview.NewInputField().
@@ -75,7 +83,12 @@ func NewApp(iface pcap.Interface, handle *pcap.Handle, filterIdx int) *types.App
 
 	app.MainFlex = tview.NewFlex().
 		SetDirection(tview.FlexColumn).
-		AddItem(app.FilterView, 14, 0, false).
+		AddItem(
+			tview.NewFlex().
+				SetDirection(tview.FlexRow).
+				AddItem(app.FilterView, 0, 1, false).
+				AddItem(app.ModeView, 3, 0, false),
+			14, 0, false).
 		AddItem(
 			tview.NewFlex().
 				SetDirection(tview.FlexRow).
@@ -84,6 +97,7 @@ func NewApp(iface pcap.Interface, handle *pcap.Handle, filterIdx int) *types.App
 			0, 1, true)
 
 	UpdateFilterView(app)
+	UpdateModeView(app)
 	SetupKeyBindings(app)
 
 	return app
@@ -100,6 +114,17 @@ func SetupKeyBindings(a *types.App) {
 				UpdateFilterView(a)
 				UpdateDisplay(a)
 				return nil
+			}
+			if event.Key() == tcell.KeyRune {
+				r := event.Rune()
+				isValid := (r >= '0' && r <= '9') ||
+					r == '.' ||
+					r == ':' ||
+					(r >= 'a' && r <= 'f') ||
+					(r >= 'A' && r <= 'F')
+				if !isValid {
+					return nil
+				}
 			}
 			return event
 		}
@@ -121,8 +146,10 @@ func SetupKeyBindings(a *types.App) {
 					ChangeFilter(a, idx)
 				}
 				return nil
-			case 'q':
-				Stop(a)
+			case 'm', 'M':
+				a.IsExpandedMode = !a.IsExpandedMode
+				UpdateModeView(a)
+				UpdateDisplay(a)
 				return nil
 			}
 		}
@@ -170,6 +197,18 @@ func UpdateFilterView(a *types.App) {
 	a.FilterView.SetText(builder.String())
 }
 
+func UpdateModeView(a *types.App) {
+	var builder strings.Builder
+	
+	if a.IsExpandedMode {
+		fmt.Fprintf(&builder, "[white:black]%-12s[white]", "[E] Expanded")
+	} else {
+		fmt.Fprintf(&builder, "[white:black]%-12s[white]", "[E] Compact")
+	}
+	
+	a.ModeView.SetText(builder.String())
+}
+
 func UpdateDisplay(a *types.App) {
 	a.PacketsMutex.RLock()
 	defer a.PacketsMutex.RUnlock()
@@ -206,18 +245,32 @@ func UpdateDisplay(a *types.App) {
 			detailStr = fmt.Sprintf(" [yellow]%s[white]", pkt.Detail)
 		}
 
-		srcDisplay := HighlightSearch(utils.TruncateString(pkt.Src, 35), a.SearchIP, "cyan")
-		dstDisplay := HighlightSearch(utils.TruncateString(pkt.Dst, 35), a.SearchIP, "magenta")
+		var srcDisplay, dstDisplay string
+		var srcWidth, dstWidth int
+		var timeFormat string
 
-		srcPadded := utils.PadString(srcDisplay, 35)
-		dstPadded := utils.PadString(dstDisplay, 35)
+		if a.IsExpandedMode {
+			srcDisplay = HighlightSearch(pkt.Src, a.SearchIP, "cyan")
+			dstDisplay = HighlightSearch(pkt.Dst, a.SearchIP, "magenta")
+			srcWidth = 50
+			dstWidth = 50
+			timeFormat = "15:04:05.000"
+		} else {
+			srcDisplay = HighlightSearch(utils.TruncateString(pkt.Src, 35), a.SearchIP, "cyan")
+			dstDisplay = HighlightSearch(utils.TruncateString(pkt.Dst, 35), a.SearchIP, "magenta")
+			srcWidth = 35
+			dstWidth = 35
+			timeFormat = "15:04:05"
+		}
+
+		srcPadded := utils.PadString(srcDisplay, srcWidth)
+		dstPadded := utils.PadString(dstDisplay, dstWidth)
 		fmt.Fprintf(&builder, "[%s:black:bi] %-6s [white] [gray]│[white] %s [gray]→[white] %s [gray]│[white] [gray]%s[white]%s\n",
-			protoColor, pkt.Proto, srcPadded, dstPadded, pkt.Timestamp.Format("15:04:05"), detailStr)
+			protoColor, pkt.Proto, srcPadded, dstPadded, pkt.Timestamp.Format(timeFormat), detailStr)
 		count++
 	}
 
 	a.PacketView.SetText(builder.String())
-	UpdateFilterView(a)
 }
 
 func HighlightSearch(text, search, defaultColor string) string {
@@ -268,7 +321,7 @@ func GetProtoColor(proto string) string {
 	}
 }
 
-func Run(a *types.App, stop chan os.Signal) {
+func Run(a *types.App) {
 	network.StartPacketCapture(a)
 	
 	go func() {

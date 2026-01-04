@@ -2,10 +2,13 @@
 
 A real-time network packet monitor with a beautiful TUI interface, built with Go. Monitor DNS, TCP, UDP, HTTP, HTTPS, QUIC, and ICMP traffic in your terminal.
 
+![Version](https://img.shields.io/github/v/release/fe-dudu/netmon)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%28Intel%2FApple%20Silicon%29%20%7C%20Linux-lightgrey)
 ![Go Version](https://img.shields.io/badge/go-1.25+-00ADD8?logo=go)
 
 ![netmon](assets/main.png)
+
+
 
 ## Installation
 
@@ -42,6 +45,8 @@ The program will automatically select the default network interface.
 - `6`: UDP - All UDP packets (L4)
 - `7`: QUIC - QUIC over UDP port 443 (UDP-based transport)
 - `8`: ICMP - ICMP/ICMPv6 packets (L3)
+- `M`: Toggle display mode (Expanded/Compact)
+  - **Expanded**: Full IP addresses (no truncation), timestamp with milliseconds
+  - **Compact** (default): Truncated IP addresses (35 chars), timestamp with seconds only
 - `Enter`: Enter search mode
-- `ESC`: Exit search mode
-- `Q`: Quit
+- `ESC`: Exit search mode, Quit

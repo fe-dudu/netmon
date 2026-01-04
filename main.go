@@ -3,9 +3,7 @@ package main
 import (
 	"log"
 	"os"
-	"os/signal"
 	"runtime"
-	"syscall"
 	"github.com/google/gopacket/pcap"
 	"github.com/fe-dudu/netmon/internal/network"
 	"github.com/fe-dudu/netmon/internal/types"
@@ -47,9 +45,6 @@ func main() {
 
 	app := ui.NewApp(iface, handle, filterIdx)
 
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-
-	ui.Run(app, stop)
+	ui.Run(app)
 }
 
