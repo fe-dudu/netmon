@@ -30,6 +30,7 @@ func NewApp(ifaces []pcap.Interface, handles []*pcap.Handle, filterIdx int) *typ
 
 	app.PacketView = tview.NewTextView().
 		SetDynamicColors(true).
+		SetTextColor(tcell.ColorWhite).
 		SetScrollable(true).
 		SetWrap(false).
 		SetChangedFunc(func() {
