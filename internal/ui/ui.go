@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
@@ -220,7 +221,7 @@ func UpdateDisplay(a *types.App) {
 
 	var builder strings.Builder
 	count := 0
-	maxDisplay := 10000
+	maxDisplay := 50000
 
 	if len(a.Packets) == 0 {
 		fmt.Fprintf(&builder, "[white]Waiting for packets...[white]\n")
@@ -333,7 +334,12 @@ func GetProtoColor(proto string) string {
 func Run(a *types.App) {
 	network.StartPacketCapture(a)
 
+	if a.Wg == nil {
+		a.Wg = &sync.WaitGroup{}
+	}
+	a.Wg.Add(1)
 	go func() {
+		defer a.Wg.Done()
 		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
 
@@ -356,5 +362,8 @@ func Run(a *types.App) {
 
 func Stop(a *types.App) {
 	close(a.StopCh)
+	if a.Wg != nil {
+		a.Wg.Wait()
+	}
 	a.App.Stop()
 }

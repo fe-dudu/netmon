@@ -54,4 +54,5 @@ type App struct {
 	Handles  []*pcap.Handle
 	PacketCh chan PacketInfo
 	StopCh   chan struct{}
+	Wg       *sync.WaitGroup
 }

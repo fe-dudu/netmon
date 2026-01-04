@@ -3,6 +3,7 @@ package network
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/fe-dudu/netmon/internal/packet"
 	"github.com/fe-dudu/netmon/internal/types"
@@ -11,8 +12,42 @@ import (
 )
 
 var (
-	skipPrefixes   = []string{"lo", "lo0", "awdl", "utun", "llw", "vmnet", "br-", "docker", "veth", "virbr", "tap", "tun", "wg", "tailscale", "zt", "ham"}
-	preferPrefixes = []string{"en", "eth", "ens", "enp", "enx", "wlan", "wlp", "wifi", "wwan"}
+	skipPrefixes = []string{
+		// Loopback
+		"lo", "lo0",
+
+		// Virtual/Tunnel interfaces
+		"utun", "anpi", "stf", "gif",
+		"tun", "tap", "ipsec", "ppp",
+		"sit", "ip6tnl", "gre", "erspan", "ip6gre",
+		"dummy", "teql",
+
+		// Bridge/Virtual networks
+		"bridge", "br-", "virbr",
+
+		// P2P/VPN
+		"p2p", "wg", "tailscale", "zt",
+
+		// VM/Container
+		"vmnet", "veth", "docker",
+
+		// Others
+		"ham",
+	}
+
+	preferPrefixes = []string{
+		// macOS/BSD
+		"en", // en0 = WiFi, en1 = Ethernet
+
+		// Linux Ethernet
+		"eth", "ens", "enp", "enx", "em",
+
+		// WiFi
+		"wlan", "wlp", "wl", "wlx", "wifi",
+
+		// Mobile/WWAN
+		"wwan", "wwp",
+	}
 )
 
 func OpenHandle(iface string) (*pcap.Handle, error) {
@@ -43,49 +78,71 @@ func OpenLiveFallback(iface string, activateErr error) (*pcap.Handle, error) {
 }
 
 func ActiveInterfaces(devs []pcap.Interface) []pcap.Interface {
+	var preferred []pcap.Interface
 	var active []pcap.Interface
+	var fallback []pcap.Interface
+
 	for _, dev := range devs {
 		name := strings.ToLower(dev.Name)
+
 		if hasPrefix(name, skipPrefixes) {
 			continue
 		}
 
-		for _, addr := range dev.Addresses {
-			if addr.IP != nil && !addr.IP.IsLoopback() {
-				active = append(active, dev)
-				break
-			}
+		fallback = append(fallback, dev)
+
+		if !hasNonLoopbackIP(dev) {
+			continue
 		}
-	}
 
-	if len(active) > 0 {
-		return active
-	}
-
-	for _, dev := range devs {
-		name := strings.ToLower(dev.Name)
-		if !strings.HasPrefix(name, "lo") && !strings.HasPrefix(name, "lo0") {
+		if hasPrefix(name, preferPrefixes) {
+			preferred = append(preferred, dev)
+		} else {
 			active = append(active, dev)
 		}
 	}
 
+	if len(preferred) > 0 {
+		return preferred
+	}
+
 	if len(active) > 0 {
 		return active
+	}
+
+	if len(fallback) > 0 {
+		return fallback
 	}
 
 	return devs
 }
 
+func hasNonLoopbackIP(dev pcap.Interface) bool {
+	for _, addr := range dev.Addresses {
+		if addr.IP != nil && !addr.IP.IsLoopback() {
+			return true
+		}
+	}
+	return false
+}
+
 func StartPacketCapture(a *types.App) {
+	if a.Wg == nil {
+		a.Wg = &sync.WaitGroup{}
+	}
+	wg := a.Wg
+
 	for idx, handle := range a.Handles {
 		if handle == nil {
 			continue
 		}
+		wg.Add(1)
 		ifaceName := a.Ifaces[idx].Name
 		packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 		packets := packetSource.Packets()
 
 		go func(name string, in <-chan gopacket.Packet) {
+			defer wg.Done()
 			for {
 				select {
 				case <-a.StopCh:
@@ -97,6 +154,8 @@ func StartPacketCapture(a *types.App) {
 					info := packet.ParsePacket(pkt)
 					info.Iface = name
 					select {
+					case <-a.StopCh:
+						return
 					case a.PacketCh <- info:
 					default:
 					}
@@ -105,16 +164,23 @@ func StartPacketCapture(a *types.App) {
 		}(ifaceName, packets)
 	}
 
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		for {
 			select {
 			case <-a.StopCh:
 				return
-			case info := <-a.PacketCh:
+			case info, ok := <-a.PacketCh:
+				if !ok {
+					return
+				}
 				a.PacketsMutex.Lock()
 				a.Packets = append(a.Packets, info)
-				if len(a.Packets) > 10000 {
-					a.Packets = a.Packets[len(a.Packets)-10000:]
+				if len(a.Packets) > 50000 {
+					newPackets := make([]types.PacketInfo, 50000, 50000)
+					copy(newPackets, a.Packets[len(a.Packets)-50000:])
+					a.Packets = newPackets
 				}
 				a.PacketsMutex.Unlock()
 			}
