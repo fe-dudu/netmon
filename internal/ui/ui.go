@@ -17,6 +17,7 @@ import (
 )
 
 func NewApp(ifaces []pcap.Interface, handles []*pcap.Handle, filterIdx int) *types.App {
+
 	app := &types.App{
 		App:              tview.NewApplication(),
 		Packets:          make([]types.PacketInfo, 0),
@@ -258,14 +259,14 @@ func UpdateDisplay(a *types.App) {
 		var timeFormat string
 
 		if a.IsExpandedMode {
-			srcDisplay = HighlightSearch(safeSrc, a.SearchIP, "cyan")
-			dstDisplay = HighlightSearch(safeDst, a.SearchIP, "magenta")
+			srcDisplay = HighlightSearch(safeSrc, a.SearchIP, "white")
+			dstDisplay = HighlightSearch(safeDst, a.SearchIP, "white")
 			srcWidth = 50
 			dstWidth = 50
 			timeFormat = "15:04:05.000"
 		} else {
-			srcDisplay = HighlightSearch(utils.TruncateString(safeSrc, 35), a.SearchIP, "cyan")
-			dstDisplay = HighlightSearch(utils.TruncateString(safeDst, 35), a.SearchIP, "magenta")
+			srcDisplay = HighlightSearch(utils.TruncateString(safeSrc, 35), a.SearchIP, "white")
+			dstDisplay = HighlightSearch(utils.TruncateString(safeDst, 35), a.SearchIP, "white")
 			srcWidth = 35
 			dstWidth = 35
 			timeFormat = "15:04:05"
@@ -317,9 +318,9 @@ func GetProtoColor(proto string) string {
 	case "HTTPS":
 		return "orange"
 	case "TCP":
-		return "cyan"
+		return "darkgreen"
 	case "UDP":
-		return "magenta"
+		return "blue"
 	case "QUIC":
 		return "purple"
 	case "ICMP", "ICMPv6":
