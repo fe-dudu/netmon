@@ -15,6 +15,7 @@ A real-time network packet monitor with a beautiful TUI interface, built with Go
 ```sh
 curl -fsSL https://raw.githubusercontent.com/fe-dudu/netmon/main/install.sh | sudo sh
 ```
+This will download the appropriate binary for your platform and install it to `/usr/local/bin/netmon`.
 
 ## Features
 
@@ -22,10 +23,7 @@ curl -fsSL https://raw.githubusercontent.com/fe-dudu/netmon/main/install.sh | su
 - **Protocol filtering** (ALL, TCP, UDP, QUIC, DNS, HTTP, HTTPS, ICMP)
 - **IP search** functionality
 - **Color-coded protocols** for easy identification
-- **Beautiful TUI** inspired by btop
-- **Layer-based filtering** (L3, L4, L7)
 
-This will download the appropriate binary for your platform and install it to `/usr/local/bin/netmon`.
 
 ## Usage
 
@@ -33,8 +31,8 @@ This will download the appropriate binary for your platform and install it to `/
 ```sh
 sudo netmon
 ```
-
 The program will automatically attach to all detected active interfaces (skipping loopback/virtual) so you can see traffic across Wi‑Fi/Ethernet/VPN simultaneously.
+
 
 2. Use keyboard shortcuts:
 - `1`: ALL - All IPv4/IPv6 traffic (L3)
