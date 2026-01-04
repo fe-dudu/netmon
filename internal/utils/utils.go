@@ -2,6 +2,25 @@ package utils
 
 import "strings"
 
+func SanitizeForDisplay(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch r {
+		case '[':
+			b.WriteString("[[")
+			continue
+		case ']':
+			b.WriteString("]]")
+			continue
+		}
+		if r < 0x20 || r == 0x7f {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
 func TruncateString(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s

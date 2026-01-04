@@ -4,7 +4,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/gopacket"
 	"github.com/google/gopacket/pcap"
 	"github.com/rivo/tview"
 )
@@ -17,6 +16,7 @@ type FilterChoice struct {
 
 type PacketInfo struct {
 	Timestamp time.Time
+	Iface     string
 	Proto     string
 	Src       string
 	Dst       string
@@ -50,8 +50,8 @@ type App struct {
 	IsSearchMode     bool
 	IsExpandedMode   bool
 
-	Iface    pcap.Interface
-	Handle   *pcap.Handle
-	PacketCh chan gopacket.Packet
+	Ifaces   []pcap.Interface
+	Handles  []*pcap.Handle
+	PacketCh chan PacketInfo
 	StopCh   chan struct{}
 }

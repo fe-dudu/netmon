@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/gdamore/tcell/v2"
-	"github.com/google/gopacket"
 	"github.com/google/gopacket/pcap"
 	"github.com/rivo/tview"
 
@@ -17,15 +16,15 @@ import (
 	"github.com/fe-dudu/netmon/internal/utils"
 )
 
-func NewApp(iface pcap.Interface, handle *pcap.Handle, filterIdx int) *types.App {
+func NewApp(ifaces []pcap.Interface, handles []*pcap.Handle, filterIdx int) *types.App {
 	app := &types.App{
 		App:              tview.NewApplication(),
 		Packets:          make([]types.PacketInfo, 0),
 		CurrentFilterIdx: filterIdx,
 		IsExpandedMode:   false,
-		Iface:            iface,
-		Handle:           handle,
-		PacketCh:         make(chan gopacket.Packet, 1000),
+		Ifaces:           ifaces,
+		Handles:          handles,
+		PacketCh:         make(chan types.PacketInfo, 1000),
 		StopCh:           make(chan struct{}),
 	}
 
@@ -165,9 +164,13 @@ func ChangeFilter(a *types.App, idx int) {
 	a.CurrentFilterIdx = idx
 	filter := types.ProtocolFilters[idx]
 
-	if err := a.Handle.SetBPFFilter(filter.BPF); err != nil {
-		log.Printf("Failed to change filter: %v", err)
-		return
+	for i, handle := range a.Handles {
+		if handle == nil {
+			continue
+		}
+		if err := handle.SetBPFFilter(filter.BPF); err != nil {
+			log.Printf("Failed to change filter on %s: %v", a.Ifaces[i].Name, err)
+		}
 	}
 
 	UpdateFilterView(a)
@@ -180,7 +183,7 @@ func UpdateFilterView(a *types.App) {
 	for i, filter := range types.ProtocolFilters {
 		num := i + 1
 		text := fmt.Sprintf("[%d] %s", num, filter.Label)
-		
+
 		if i == a.CurrentFilterIdx {
 			fmt.Fprintf(&builder, "[black:yellow:bi]%-12s[black:white]", text)
 		} else {
@@ -199,13 +202,13 @@ func UpdateFilterView(a *types.App) {
 
 func UpdateModeView(a *types.App) {
 	var builder strings.Builder
-	
+
 	if a.IsExpandedMode {
-		fmt.Fprintf(&builder, "[white:black]%-12s[white]", "[E] Expanded")
+		fmt.Fprintf(&builder, "[white:black]%-12s[white]", "Expanded")
 	} else {
-		fmt.Fprintf(&builder, "[white:black]%-12s[white]", "[E] Compact")
+		fmt.Fprintf(&builder, "[white:black]%-12s[white]", "Compact")
 	}
-	
+
 	a.ModeView.SetText(builder.String())
 }
 
@@ -240,9 +243,13 @@ func UpdateDisplay(a *types.App) {
 
 		protoColor := GetProtoColor(pkt.Proto)
 
+		safeSrc := utils.SanitizeForDisplay(pkt.Src)
+		safeDst := utils.SanitizeForDisplay(pkt.Dst)
+		safeDetail := utils.SanitizeForDisplay(pkt.Detail)
+
 		detailStr := ""
-		if pkt.Detail != "" {
-			detailStr = fmt.Sprintf(" [yellow]%s[white]", pkt.Detail)
+		if safeDetail != "" {
+			detailStr = fmt.Sprintf(" [yellow]%s[white]", safeDetail)
 		}
 
 		var srcDisplay, dstDisplay string
@@ -250,14 +257,14 @@ func UpdateDisplay(a *types.App) {
 		var timeFormat string
 
 		if a.IsExpandedMode {
-			srcDisplay = HighlightSearch(pkt.Src, a.SearchIP, "cyan")
-			dstDisplay = HighlightSearch(pkt.Dst, a.SearchIP, "magenta")
+			srcDisplay = HighlightSearch(safeSrc, a.SearchIP, "cyan")
+			dstDisplay = HighlightSearch(safeDst, a.SearchIP, "magenta")
 			srcWidth = 50
 			dstWidth = 50
 			timeFormat = "15:04:05.000"
 		} else {
-			srcDisplay = HighlightSearch(utils.TruncateString(pkt.Src, 35), a.SearchIP, "cyan")
-			dstDisplay = HighlightSearch(utils.TruncateString(pkt.Dst, 35), a.SearchIP, "magenta")
+			srcDisplay = HighlightSearch(utils.TruncateString(safeSrc, 35), a.SearchIP, "cyan")
+			dstDisplay = HighlightSearch(utils.TruncateString(safeDst, 35), a.SearchIP, "magenta")
 			srcWidth = 35
 			dstWidth = 35
 			timeFormat = "15:04:05"
@@ -323,11 +330,11 @@ func GetProtoColor(proto string) string {
 
 func Run(a *types.App) {
 	network.StartPacketCapture(a)
-	
+
 	go func() {
 		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
-		
+
 		for {
 			select {
 			case <-a.StopCh:
@@ -337,7 +344,7 @@ func Run(a *types.App) {
 			}
 		}
 	}()
-	
+
 	a.App.EnableMouse(true)
 
 	if err := a.App.SetRoot(a.MainFlex, true).SetFocus(a.PacketView).Run(); err != nil {

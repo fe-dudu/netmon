@@ -34,7 +34,7 @@ This will download the appropriate binary for your platform and install it to `/
 sudo netmon
 ```
 
-The program will automatically select the default network interface.
+The program will automatically attach to all detected active interfaces (skipping loopback/virtual) so you can see traffic across Wi‑Fi/Ethernet/VPN simultaneously.
 
 2. Use keyboard shortcuts:
 - `1`: ALL - All IPv4/IPv6 traffic (L3)
