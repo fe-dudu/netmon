@@ -13,7 +13,7 @@ A real-time network packet monitor with a beautiful TUI interface, built with Go
 ## Installation
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/fe-dudu/netmon/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/fe-dudu/netmon/main/install.sh | sudo sh
 ```
 
 ## Features
