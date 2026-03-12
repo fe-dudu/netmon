@@ -12,21 +12,18 @@ import (
 )
 
 var (
-	skipPrefixes = []string{
-		// Loopback
-		"lo", "lo0",
+	loopbackPrefixes = []string{"lo", "lo0"}
 
-		// Virtual/Tunnel interfaces
+	vpnPrefixes = []string{
 		"utun", "anpi", "stf", "gif",
 		"tun", "tap", "ipsec", "ppp",
 		"sit", "ip6tnl", "gre", "erspan", "ip6gre",
-		"dummy", "teql",
+		"p2p", "wg", "tailscale", "zt",
+	}
 
+	skipPrefixes = []string{
 		// Bridge/Virtual networks
 		"bridge", "br-", "virbr",
-
-		// P2P/VPN
-		"p2p", "wg", "tailscale", "zt",
 
 		// VM/Container
 		"vmnet", "veth", "docker",
@@ -49,6 +46,11 @@ var (
 		"wwan", "wwp",
 	}
 )
+
+type InterfaceOptions struct {
+	IncludeLoopback bool
+	IncludeVPN      bool
+}
 
 func OpenHandle(iface string) (*pcap.Handle, error) {
 	inactive, err := pcap.NewInactiveHandle(iface)
@@ -77,7 +79,7 @@ func OpenLiveFallback(iface string, activateErr error) (*pcap.Handle, error) {
 	return handle, nil
 }
 
-func ActiveInterfaces(devs []pcap.Interface) []pcap.Interface {
+func ActiveInterfaces(devs []pcap.Interface, opts InterfaceOptions) []pcap.Interface {
 	var preferred []pcap.Interface
 	var active []pcap.Interface
 	var fallback []pcap.Interface
@@ -85,11 +87,24 @@ func ActiveInterfaces(devs []pcap.Interface) []pcap.Interface {
 	for _, dev := range devs {
 		name := strings.ToLower(dev.Name)
 
+		if hasPrefix(name, loopbackPrefixes) && !opts.IncludeLoopback {
+			continue
+		}
+
+		if hasPrefix(name, vpnPrefixes) && !opts.IncludeVPN {
+			continue
+		}
+
 		if hasPrefix(name, skipPrefixes) {
 			continue
 		}
 
 		fallback = append(fallback, dev)
+
+		if hasPrefix(name, loopbackPrefixes) || hasPrefix(name, vpnPrefixes) {
+			active = append(active, dev)
+			continue
+		}
 
 		if !hasNonLoopbackIP(dev) {
 			continue
@@ -99,6 +114,12 @@ func ActiveInterfaces(devs []pcap.Interface) []pcap.Interface {
 			preferred = append(preferred, dev)
 		} else {
 			active = append(active, dev)
+		}
+	}
+
+	if opts.IncludeLoopback || opts.IncludeVPN {
+		if len(preferred) > 0 || len(active) > 0 {
+			return append(preferred, active...)
 		}
 	}
 

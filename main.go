@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"os"
 	"runtime"
@@ -14,6 +15,10 @@ import (
 
 func main() {
 	log.SetFlags(0)
+
+	includeLoopback := flag.Bool("include-loopback", false, "include loopback interfaces such as lo0")
+	includeVPN := flag.Bool("include-vpn", false, "include VPN and tunnel interfaces such as utun/tun/wg")
+	flag.Parse()
 
 	if runtime.GOOS != "windows" {
 		if os.Geteuid() != 0 {
@@ -30,7 +35,10 @@ func main() {
 	}
 
 	filterIdx := 0
-	activeIfaces := network.ActiveInterfaces(devices)
+	activeIfaces := network.ActiveInterfaces(devices, network.InterfaceOptions{
+		IncludeLoopback: *includeLoopback,
+		IncludeVPN:      *includeVPN,
+	})
 	if len(activeIfaces) == 0 {
 		log.Fatalf("pcap: no active interfaces detected")
 	}

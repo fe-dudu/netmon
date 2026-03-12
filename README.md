@@ -31,7 +31,19 @@ This will download the appropriate binary for your platform and install it to `/
 ```sh
 sudo netmon
 ```
-The program will automatically attach to all detected active interfaces (skipping loopback/virtual) so you can see traffic across Wi‑Fi/Ethernet/VPN simultaneously.
+The program will automatically attach to detected active physical interfaces by default, so you can see traffic across Wi‑Fi and Ethernet. Use the flags below to include loopback and VPN/tunnel interfaces when needed.
+
+To include loopback or VPN/tunnel interfaces explicitly:
+
+```sh
+sudo netmon --include-loopback --include-vpn
+```
+
+If you are running from source:
+
+```sh
+sudo go run . --include-loopback
+```
 
 
 2. Use keyboard shortcuts:
@@ -48,3 +60,8 @@ The program will automatically attach to all detected active interfaces (skippin
   - **Compact** (default): Truncated IP addresses (35 chars), timestamp with seconds only
 - `Enter`: Enter search mode
 - `ESC`: Exit search mode, Quit
+
+## Interface Options
+
+- `--include-loopback`: Include loopback interfaces such as `lo` and `lo0`. Useful for local proxy traffic on `127.0.0.1` or `localhost`.
+- `--include-vpn`: Include VPN and tunnel interfaces such as `utun`, `tun`, `tap`, `wg`, `tailscale`, and `zt`.
