@@ -60,7 +60,7 @@ func NewApp(ifaces []pcap.Interface, handles []*pcap.Handle, filterIdx int) *typ
 		SetTitleAlign(tview.AlignLeft)
 
 	app.SearchInput = tview.NewInputField().
-		SetPlaceholder("Press Enter↵ to search").
+		SetPlaceholder("Search IP/port (comma-separated)").
 		SetPlaceholderStyle(tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorBlack)).
 		SetFieldBackgroundColor(tcell.ColorBlack).
 		SetChangedFunc(func(text string) {
@@ -122,6 +122,8 @@ func SetupKeyBindings(a *types.App) {
 				isValid := (r >= '0' && r <= '9') ||
 					r == '.' ||
 					r == ':' ||
+					r == ',' ||
+					r == ' ' ||
 					(r >= 'a' && r <= 'f') ||
 					(r >= 'A' && r <= 'F')
 				if !isValid {
@@ -235,13 +237,9 @@ func UpdateDisplay(a *types.App) {
 			continue
 		}
 
-		if a.SearchIP != "" {
-			searchLower := strings.ToLower(a.SearchIP)
-			srcLower := strings.ToLower(pkt.Src)
-			dstLower := strings.ToLower(pkt.Dst)
-			if !strings.Contains(srcLower, searchLower) && !strings.Contains(dstLower, searchLower) {
-				continue
-			}
+		searchTerms := ParseSearchTerms(a.SearchIP)
+		if len(searchTerms) > 0 && !MatchesAnySearchTerm(pkt, searchTerms) {
+			continue
 		}
 
 		protoColor := GetProtoColor(pkt.Proto)
@@ -284,28 +282,66 @@ func UpdateDisplay(a *types.App) {
 }
 
 func HighlightSearch(text, search, defaultColor string) string {
-	if search == "" {
+	terms := ParseSearchTerms(search)
+	if len(terms) == 0 {
 		return fmt.Sprintf("[%s]%s[white]", defaultColor, text)
 	}
 
-	searchLower := strings.ToLower(search)
 	textLower := strings.ToLower(text)
-
-	if !strings.Contains(textLower, searchLower) {
+	searchLower := FirstMatchingTerm(textLower, terms)
+	if searchLower == "" {
 		return fmt.Sprintf("[%s]%s[white]", defaultColor, text)
 	}
 
 	var result strings.Builder
 	idx := strings.Index(textLower, searchLower)
+	matchLen := len(searchLower)
 	if idx > 0 {
 		result.WriteString(fmt.Sprintf("[%s]%s[white]", defaultColor, text[:idx]))
 	}
-	result.WriteString(fmt.Sprintf("[yellow:black:bi]%s[white]", text[idx:idx+len(search)]))
-	if idx+len(search) < len(text) {
-		result.WriteString(fmt.Sprintf("[%s]%s[white]", defaultColor, text[idx+len(search):]))
+	result.WriteString(fmt.Sprintf("[yellow:black:bi]%s[white]", text[idx:idx+matchLen]))
+	if idx+matchLen < len(text) {
+		result.WriteString(fmt.Sprintf("[%s]%s[white]", defaultColor, text[idx+matchLen:]))
 	}
 
 	return result.String()
+}
+
+func ParseSearchTerms(search string) []string {
+	if search == "" {
+		return nil
+	}
+
+	rawTerms := strings.Split(search, ",")
+	terms := make([]string, 0, len(rawTerms))
+	for _, term := range rawTerms {
+		trimmed := strings.ToLower(strings.TrimSpace(term))
+		if trimmed == "" {
+			continue
+		}
+		terms = append(terms, trimmed)
+	}
+
+	return terms
+}
+
+func MatchesAnySearchTerm(pkt types.PacketInfo, terms []string) bool {
+	srcLower := strings.ToLower(pkt.Src)
+	dstLower := strings.ToLower(pkt.Dst)
+	detailLower := strings.ToLower(pkt.Detail)
+
+	return FirstMatchingTerm(srcLower, terms) != "" ||
+		FirstMatchingTerm(dstLower, terms) != "" ||
+		FirstMatchingTerm(detailLower, terms) != ""
+}
+
+func FirstMatchingTerm(text string, terms []string) string {
+	for _, term := range terms {
+		if strings.Contains(text, term) {
+			return term
+		}
+	}
+	return ""
 }
 
 func GetProtoColor(proto string) string {

@@ -21,7 +21,7 @@ This will download the appropriate binary for your platform and install it to `/
 
 - **Real-time packet monitoring** with live updates
 - **Protocol filtering** (ALL, TCP, UDP, QUIC, DNS, HTTP, HTTPS, ICMP)
-- **IP search** functionality
+- **Single or multi-term IP/port search** with comma-separated input
 - **Color-coded protocols** for easy identification
 
 
@@ -60,6 +60,12 @@ sudo go run . --include-loopback
   - **Compact** (default): Truncated IP addresses (35 chars), timestamp with seconds only
 - `Enter`: Enter search mode
 - `ESC`: Exit search mode, Quit
+
+## Search
+
+- Search accepts a single term such as `443` or `127.0.0.1`
+- Search also accepts comma-separated terms such as `513,512,511,500`
+- Matching is applied across source, destination, and detail fields
 
 ## Interface Options
 
